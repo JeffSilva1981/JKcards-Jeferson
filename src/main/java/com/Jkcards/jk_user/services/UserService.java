@@ -6,6 +6,8 @@ import com.Jkcards.jk_user.entities.Role;
 import com.Jkcards.jk_user.entities.User;
 import com.Jkcards.jk_user.repositories.RoleRepository;
 import com.Jkcards.jk_user.repositories.UserRepository;
+import com.Jkcards.jk_user.services.exceptions.DatabaseException;
+import com.Jkcards.jk_user.services.exceptions.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,18 +29,23 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public Page<UserResponseDto> findAll(Pageable pageable) {
-        Page<User> result = repository.findAll(pageable);
+        Page<User> result = repository.findByActiveTrue(pageable);
         return result.map(x-> new UserResponseDto(x));
     }
 
     @Transactional(readOnly = true)
     public UserResponseDto findById(Long id) {
-        User user = repository.findById(id).get();
+
+        User user = repository.findById(id).orElseThrow(()->new  ResourceNotFoundException("User Not Found"));
         return new UserResponseDto(user);
     }
 
     @Transactional
     public UserResponseDto insert(UserRequestDto dto) {
+
+        if (repository.existsByEmail(dto.getEmail())){
+            throw new DatabaseException("Email already registered");
+        }
 
         User user = new User();
         copyDtoToEntity(user,dto);
@@ -47,22 +54,30 @@ public class UserService {
         return new UserResponseDto(user);
     }
 
+
     @Transactional
     public UserResponseDto update(UserRequestDto requestDto, Long id) {
 
-        User user = repository.findById(id).get();
+        User user = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        copyDtoToEntityForUpdate(user,requestDto);
-        user.setActive(true);
+        if (repository.existsByEmailAndIdNot(requestDto.getEmail(), id)) {
+            throw new DatabaseException("Email already registered");
+        }
+
+        copyDtoToEntityForUpdate(user, requestDto);
+
         user = repository.save(user);
+
         return new UserResponseDto(user);
     }
 
     @Transactional
     public void delete(Long id) {
 
-        User user = repository.findById(id).get();
+        User user = repository.findById(id).orElseThrow(()-> new ResourceNotFoundException("User not found"));
         user.setActive(false);
+        user = repository.save(user);
     }
 
     private void copyDtoToEntity(User user, UserRequestDto dto) {
@@ -71,8 +86,11 @@ public class UserService {
         user.setCellPhone(dto.getCellPhone());
         user.setEmail(dto.getEmail());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
-
         Role role = roleRepository.findByRoleName("CLIENT");
+
+        if (role == null){
+            throw new ResourceNotFoundException("Role not found");
+        }
         user.setRole(role);
     }
 
@@ -81,9 +99,16 @@ public class UserService {
         user.setName(requestDto.getName());
         user.setCellPhone(requestDto.getCellPhone());
         user.setEmail(requestDto.getEmail());
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
+
+        if (requestDto.getPassword() != null && !requestDto.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(requestDto.getPassword()));
+        }
 
         Role role = roleRepository.findByRoleName(requestDto.getRoleName());
+
+        if (role == null){
+            throw new ResourceNotFoundException("Role not found");
+        }
         user.setRole(role);
     }
 }
