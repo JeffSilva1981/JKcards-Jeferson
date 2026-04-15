@@ -44,7 +44,7 @@ public class UserService {
     public UserResponseDto insert(UserRequestDto dto) {
 
         if (repository.existsByEmail(dto.getEmail())){
-            throw new DatabaseException("Email already registered");
+            throw new DatabaseException("Email already exists");
         }
 
         User user = new User();
@@ -62,13 +62,11 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (repository.existsByEmailAndIdNot(requestDto.getEmail(), id)) {
-            throw new DatabaseException("Email already registered");
+            throw new DatabaseException("Email already exists");
         }
 
         copyDtoToEntityForUpdate(user, requestDto);
-
         user = repository.save(user);
-
         return new UserResponseDto(user);
     }
 
@@ -104,7 +102,7 @@ public class UserService {
             user.setPassword(passwordEncoder.encode(requestDto.getPassword()));
         }
 
-        Role role = roleRepository.findByRoleName(requestDto.getRoleName());
+        Role role = roleRepository.findByRoleName("CLIENT");
 
         if (role == null){
             throw new ResourceNotFoundException("Role not found");
